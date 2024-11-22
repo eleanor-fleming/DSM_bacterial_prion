@@ -46,7 +46,7 @@ def align(target_names, alignment_parameters, run_names, library_name, lib_dir, 
     mapper = alignparse.minimap2.Mapper(alignparse.minimap2.OPTIONS_CODON_DMS)
     print(f"Using `minimap2` {mapper.version} with these options:\n" + " ".join(mapper.options))
     
-    #  STEP 3: create read files dataframe (required by align_and_parse function)
+    # STEP 3: create read files dataframe (required by align_and_parse function)
     libraries = [library_name] * len(run_names)
     df_runs = pd.DataFrame(
     {
