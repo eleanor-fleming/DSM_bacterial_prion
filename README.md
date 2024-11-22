@@ -1,13 +1,13 @@
-# DSM_bacterial_prion
+# DMS_bacterial_prion
 
-## DEEP SCANNING MUTAGENESIS OF A BACTERIAL PRION PROTEIN
+## DEEP MUTATIONAL SCANNING OF A BACTERIAL PRION PROTEIN
 
 Analysis of deep mutational scanning of barcoded codon variants of Campylobacter hominis single-stranded DNA-binding (SSB) protein prion domain (PrD)
 
 Study and analysis by Eleanor Fleming
 
 ## PURPOSE
-The purpose of this project is to analyze data collected from a screen or selection of a barcoded deep scanning mutagenic library. In this case our library consists of all possible
+The purpose of this project is to analyze data collected from a screen or selection of a barcoded deep mutational scanning library. In this case our plasmid library consists of all possible
 single amino acid substitutions in a gene encoding a bacterial prion domain, each with at least one unique N16 barcode. The prion domain is expressed with an N-terminal monomeric yellow fluorescent protein (mYFP) fusion to enable estimation of protein stability via fluorescent activated cell sorting (FACS, see below). We screened our library in two related screens for two aspects of prion behavior; conversion (initial spontaneous appearance of amyloid conformation) and propagation (continued inheritance of amyloid form via self-templating reaction). 
 
 ## SUMMARY OF WORKFLOW
