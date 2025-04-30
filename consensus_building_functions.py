@@ -46,7 +46,7 @@ def align(target_names, alignment_parameters, run_names, library_name, lib_dir, 
     mapper = alignparse.minimap2.Mapper(alignparse.minimap2.OPTIONS_CODON_DMS)
     print(f"Using `minimap2` {mapper.version} with these options:\n" + " ".join(mapper.options))
     
-    # STEP 3: create read files dataframe (required by align_and_parse function)
+    #  STEP 3: create read files dataframe (required by align_and_parse function)
     libraries = [library_name] * len(run_names)
     df_runs = pd.DataFrame(
     {
@@ -76,12 +76,10 @@ def pair_aligned_reads(aligned):
     
     INPUTS:
     1) 'aligned' -- a dictionary in which keys are the target names and values are dataframes specifying
-        information on each read successfully aligned to that target. (This the 2nd output from the align function.)
+        information on each read successfully aligned to that target. (This the 2nd output from the             align function.)
     
     OUTPUTS:
-    1) dataframe with columns specifying read names and additional target features (eg barcode sequence, barcode
-        accuracy, gene sequence, gene accuracy), as specified in the target.gb files provided to the 
-        align_and_parse function.
+    1) dataframe with columns specifying read names and additional target features (eg barcode sequence,        barcode accuracy, gene sequence, gene accuracy), as specified in the target.gb files provided to        the align_and_parse function.
 
     """
     
@@ -323,7 +321,7 @@ def filter_indels(paired):
 
 
 
-def distinguish_rare_codons(barcode_variant, num_bins=15):
+def distinguish_rare_codons(barcode_variant, num_bins=15, library_name):
     
     """
     
@@ -372,6 +370,10 @@ def distinguish_rare_codons(barcode_variant, num_bins=15):
     
     # add as new column to singles dataframe
     singles['new_aa_substitutions'] = new_aa_substitutions
+    
+    # save singles dataframe as csv file
+    singles_df_filename = './' + library_name + '_singles_bcvariants.csv' 
+    singles.to_csv(singles_df_filename) # save singles as csv
     
     # Visualization 1: histogram of barcodes per variant
     bins = list(range(1,num_bins+1)) # set bins
