@@ -36,16 +36,20 @@ FACS_df = import_FACS_barcode_counts(list_of_sample_names, list_of_counts_paths)
 data = merge_with_CVT(path_to_CVT, FACS_df)
 
 ## normalize read counts across all FACS bins
-data = normalize_read_counts(data,list_of_sample_names,list_of_cell_counts )
+data = normalize_read_counts(data,list_of_sample_names)
+
+# estimate cell count per barcode
+data = estimate_cell_count(data, list_of_sample_names, list_of_cell_counts)
 
 ## add 1 pseudocount to each counts column to avoid barcode loss (see function description)
 data = add_pseudocount(data, list_of_sample_names, 1)
 
 # drop unneeded counts columns
-data=drop_extra_counts_col(data,list_of_sample_names)
+data = drop_extra_counts_col(data,list_of_sample_names)
 
 # add variant type column
 data = add_type(data)
 
 # save as csv
 data.to_csv(final_filename)
+
