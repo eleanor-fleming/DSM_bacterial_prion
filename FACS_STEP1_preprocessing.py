@@ -5,8 +5,6 @@
 
 
 ## dependencies
-
-# standard packages
 import os
 import warnings
 import numpy as np

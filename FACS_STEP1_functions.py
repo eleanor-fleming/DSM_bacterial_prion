@@ -98,7 +98,7 @@ def normalize_read_counts(df, list_of_sample_names):
     """
     
     # make deep copy of data_df
-    df_out = df.copy()
+    df_out = df.copy(deep=True)
     
     # perform normalization
     for n in list_of_sample_names:
@@ -172,7 +172,7 @@ def add_pseudocount(df, list_of_sample_names, p):
     names = []
     
     # deep copy df
-    df_out = df.copy()
+    df_out = df.copy(deep=True)
     
     # get names of columns with normalized read counts
     for n in list_of_sample_names:
@@ -214,7 +214,7 @@ def drop_extra_counts_col(df,list_of_sample_names):
     to_remove = []
     
     # deep copy df
-    df_out = df.copy()
+    df_out = df.copy(deep=True)
     
     # get names of columns to remove
     for n in list_of_sample_names:
@@ -269,7 +269,7 @@ def add_type(df):
             else:
                 types.append('multiple')
            
-    df_out = df.copy()
+    df_out = df.copy(deep=True)
         
     df_out['variant_type'] = types
         
