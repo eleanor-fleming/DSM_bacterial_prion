@@ -12,7 +12,7 @@ single amino acid substitutions in a gene encoding a bacterial prion domain, eac
 
 ## SUMMARY OF WORKFLOW
 1) generate the barcode-gene variant mappings which includes generating high quailty consensus gene sequences. [consensus_building_functions.py and consensus_building.py]
-2) estimate variant protein stability from barcode counts from FACS data [script in progress].
+2) estimate variant protein stability from barcode counts from FACS data [FACS_STEP1_preprocessing.py, FACS_STEP1_functions.py, FACS_STEP3_Ztest.py, FACS_STEP3_functions.py].
 3) analyze barcode counts in conversion screen outputs to identify variants with enhanced conversion dynamics [script in progress].
 4) analyze barcode counts in propagation screen outputs to identify variants with diminished and/or enhanced propagation dynamics [script in progress].
 
