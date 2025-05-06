@@ -1,0 +1,262 @@
+---
+title: "05-01-25_rep1_MLE_meanFlu_FACSdata_STEP2"
+author: "Eleanor Fleming"
+date: '2025-05-01'
+output:
+  github_document:
+    html_preview: false
+editor_options: 
+  chunk_output_type: inline
+---
+# MAXIMUM LIKELIHOOD ESTIMATION OF MEAN YFP FLUORESCENCE OF BARCODED VARIANTS
+
+## BACKGROUND
+In python (05-05-25 jupyter notebook), I normalized variant-barcode read counts across the 3 FACs bins, estimated cell counts for each barcode, and added 1 pseudocount. The pseudocount is added so that perfectly good variant-barcodes aren't excluded from MLE of mean fluorescence because they have 0 reads in the high and low bins. (The fitdistrplus package used here requires at least 1 count in at least 2 bins). 
+
+Here, I'm going use the fitdistrplus package to estimate the mean YFP fluorescence of each variant-barcode. As a final step, I will filter this dataset by a min cell count of 20. This should ensure robust mean fluorescence predictions. 
+
+I will use these filtered outputs as input files in a second .py script in which I will identify all variant-barcodes with aberrant fluorescence (which we're using as a proxy for YFP-PrD fusion protein expression). Specifically, I'll perform Z-tests to identify variant-barcodes associated with statistically significant different mean fluorescence compared to the mean of all WT variant-barcodes in the dataset. 
+
+This R notebook is adapted from the .Rmd file generously shared by Starr et al, 2020, found here: jbloomlab / SARS-CoV-2-RBD_DMS.
+
+## SET UP
+```{r setup, message=FALSE, warning=FALSE, error=FALSE}
+
+## General set up
+require("knitr")
+knitr::opts_chunk$set(echo = T)
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
+
+## install and load required packages, as needed
+# requirements
+packages = c("yaml","data.table","tidyverse","Hmisc","fitdistrplus","gridExtra")
+# install
+installed_packages <- packages %in% rownames(installed.packages())
+if(any(installed_packages == F)){
+  install.packages(packages[!installed_packages])}
+# load
+invisible(lapply(packages, library, character.only=T))
+
+```
+
+### SESSION INFO
+```{r print_sessionInfo}
+sessionInfo()
+```
+
+### READ FACS DATA FILES
+```{r load input}
+counts <- data.table(read.csv('20250505_REP1_FACS_preprocessing_Part1output',stringsAsFactors=F)) 
+```
+
+### CALCULATE TOTAL COUNTS PER BARCODE
+Will need this later.
+```{r clean data a little}
+# calculate total cells sorted per barcode "total_count"
+counts[,total_count := sum(low_bin_cell_count,med_bin_cell_count,high_bin_cell_count),by=barcode]
+
+# remove barodes with 0 read counts (no coverage in sort). These will have 3 total_count due to pseudocounts added.
+print('Minimum reads per barcode pre-filter:')
+print(min(counts$total_count))
+counts <-counts  %>%filter(total_count > 3)
+print('Minimum reads per barcode post-filter:')
+print(min(counts$total_count))
+
+# confirm there is no missing data
+print(sum(is.na(counts)))
+```
+
+## ESTIMATE MEAN FLUORESCENCE
+```{r calculate_meanF, error=FALSE, message=FALSE, warning=FALSE, results=F}
+
+## Define function
+calc.MLmean <- function(b1,b2,b3,min.b1,min.b2,min.b3,max.b3,min.count=1){ #b1-3 gives observed cell counts in bins 1-3; remaining arguments give fluorescence boundaries of the respective bins; min.count gives minimum number of total observations needed across bins in order to calculate meanF (default 1)
+  
+  data <- data.frame(left=c(rep(min.b1,round(b1)),rep(min.b2,round(b2)),rep(min.b3,round(b3))),
+                     right=c(rep(min.b2,round(b1)),rep(min.b3,round(b2)),rep(max.b3,round(b3)))) #define data input in format required for fitdistcens
+  
+  if(nrow(unique(data))>1 & nrow(data)>min.count){ #only fits if above user-specified min.count, and if the data satisfies the fitdistcens requirement that cells are observed in at least two of the censored partitions to enable ML estimation of identifiable parameters
+    fit <- fitdistcens(data,"norm")
+    return(list(as.numeric(summary(fit)$estimate["mean"]),as.numeric(summary(fit)$estimate["sd"])))
+  } else {
+    return(list(as.numeric(NA),as.numeric(NA)))
+  }
+}
+
+# Perform mean and sd estimation for each barcode. Multiplying cell counts by a factor of 20 to minimize rounding errors since fitdistcens requires rounding to integer inputs
+counts <- counts[,c("ML_meanF","ML_sdF") := tryCatch(calc.MLmean(b1=low_bin_cell_count,
+                                                                 b2=med_bin_cell_count,
+                                                                 b3=high_bin_cell_count,
+                                                                 min.b1=log(20),
+                                                                 min.b2=log(400),
+                                                                 min.b3=log(4500),
+                                                                 max.b3 =log(20000)),
+                                                               error=function(e){return(list(as.numeric(NA),as.numeric(NA)))}),by=barcode]
+
+
+```
+
+
+## PLOTS FOR QUALITY CHECKS
+
+### HISTOGRAM OF MEAN FLUORESCENCE ESTIMATE VALUES BY VARIANT TYPE
+```{r unfiltered_expression_distribution, echo=T, fig.width=13, fig.height=5, fig.align="center", dpi=300,dev="png"}
+
+#histograms expression values for each variant class
+par(mfrow=c(1,2))
+hist(counts[variant_type %in% (c("WT")),ML_meanF],col="gray40", main= 'Mean fluorescence values, Replciate 1',breaks=50,xlab="ML mean fluorescence (a.u.)", ylim=c(0,2000))
+hist(counts[variant_type %in% (c("synonymous")),ML_meanF],col="#92278F",add=T,breaks=50, ylim=c(0,2000))
+hist(counts[variant_type %in% (c("single")),ML_meanF],col="#2E3192",add=T,breaks=50, ylim=c(0,2000))
+hist(counts[variant_type %in% (c("multiple")),ML_meanF],col="#BE1E2D",add=T,breaks=50, ylim=c(0,2000))
+hist(counts[variant_type %in% (c("SSB1-1")),ML_meanF],col="limegreen",add=T,breaks=50, ylim=c(0,2000))
+legend("topright", c("WT", "synonymous", "single", "multiple", "SSB1-1"), fill=c("gray40", "#92278F", "#2E3192", "#BE1E2D", "limegreen"))
+
+```
+
+### PLOT WT SEPARATELY TO COMPARE TO LIBRARY POPULATION
+
+```{r unfiltered_expression_distribution, echo=T, fig.width=13, fig.height=5, fig.align="center", dpi=300,dev="png"}
+# WT ONLY
+par(mfrow=c(1,2))
+hist(counts[variant_type %in% (c("WT")),ML_meanF],col="gray40", main= 'WT meanF, Replicate 1',breaks=50,xlab="ML mean fluorescence (a.u.)", ylim=c(0,500))
+```
+
+
+## ESTIMATE VARIANCE 
+
+Estimate variance as a function of cell count using linear regression model fit to WT data
+
+### HISTOGRAM OF CELL COUNTS PER BARCODE
+```{r cell_count_coverage, echo=T, fig.width=13, fig.height=5, fig.align="center", dpi=300,dev="png"}
+# Plot histogram of cell counts per barcode to determine range in count values
+par(mfrow=c(1,2))
+hist(log10(counts$total_count),xlab="cell count (log10)",main="Cell counts per barcode, Replicate 1",col="gray50")
+```
+
+
+### WT ONLY CELL COUNT HISTOGRAM
+```{r cell_count_coverage, echo=T, fig.width=13, fig.height=5, fig.align="center", dpi=300,dev="png"}
+# Repeat for WT only, to ensure WT-barcodes are no different than rest of library
+
+# Filter for WT only
+wt_lib1 <- counts[variant_type %in% c("synonymous","WT")]
+
+par(mfrow=c(1,2))
+hist(log10(wt_lib1$total_count),xlab="cell count (log10)",main="Cell counts per WT-barcode, Replicate 1",col="gray50")
+```
+The range of WT-barcode cell counts is similar to the rest of the library: about 0 to 325 cells, with majority having at least 20.
+
+
+### FIT LINEAR REGRESSION TO WT DATA
+
+```{r estimate_variance, fig.width=8, fig.height=8,fig.align="center", dpi=300,dev="png"}
+
+## Bin WT-barcodes based on cell counts
+
+# Set num of bins
+
+n.breaks.wt_lib1 <- 20 
+wt.bins_lib1 <- data.frame(bin=1:n.breaks.wt_lib1)
+breaks.wt_lib1 <- cut2(wt_lib1$total_count,m=250,g=n.breaks.wt_lib1,onlycuts=T)
+
+# notes on cut2 function: x = numeric vector to classify into intervals, m = minimum number of observations desired in each interval (not guaranteed), g = number of quantile groups, onlycuts = T means only return the vector of computed cuts. 
+
+# Pool WT-barcodes into bins, calculate mean and standard error of mean for each bin
+for(i in 1:nrow(wt.bins_lib1)){
+  wt.bins_lib1$range.cells[i] <- list(c(breaks.wt_lib1[i],breaks.wt_lib1[i+1]))
+  data <- wt_lib1[total_count >= wt.bins_lib1$range.cells[i][[1]][[1]] & total_count < wt.bins_lib1$range.cells[i][[1]][[2]],]
+  wt.bins_lib1$median.cells[i] <- median(data$total_count,na.rm=T)
+  wt.bins_lib1$mean.ML_meanF[i] <- mean(data$ML_meanF,na.rm=T)
+  wt.bins_lib1$sd.ML_meanF[i] <- sd(data$ML_meanF,na.rm=T)}
+
+# Fit linear regression: variance ~ cell count
+# expect inverse relationship between variance and cell count (variance decreases as cell count increases)
+
+par(mfrow=c(2,2))
+y1_lib1 <- (wt.bins_lib1$sd.ML_meanF)^2;x1_lib1 <- wt.bins_lib1$median.cells
+plot(x1_lib1,y1_lib1,xlab="number cells",ylab="variance in ML meanF measurement",main="WT data, Replicate 1",pch=19,col="#92278F")
+plot(log(x1_lib1),log(y1_lib1),xlab="log(number cells)",ylab="log(variance in ML meanF measurement)",main="WT data, Replicate 1",pch=19,col="#92278F")
+fit_variance_v_count_lib1 <- lm(log(y1_lib1) ~ log(x1_lib1));summary(fit_variance_v_count_lib1);abline(fit_variance_v_count_lib1)
+
+```
+The trend makes sense - more coverage == lower variance.
+
+
+### ESTIMATE VARIANCE OF MLE MEAN FOR COMPLETE DATASET  
+
+```{r Estimate variance of meanF}
+#function to estimate variance from cell count given the fits above
+est.var <- function(count,fit){
+  return(exp(as.numeric(fit$coefficients[1]) + as.numeric(fit$coefficients[2]) * log(count)))
+}
+counts[,var_ML_meanF := est.var(total_count,fit_variance_v_count_lib1),by=barcode]
+```
+
+
+### Filter by minimum cell number requirement
+```{r Filter by minimum cell number requirement}
+#filter by 10 counts
+counts_filtered_lib1_10 <- copy(counts)
+counts_filtered_lib1_10<-counts_filtered_lib1_10[total_count < 10, c("ML_meanF","var_ML_meanF") := as.numeric(NA),by=barcode]
+print(paste("Generated meanF estimates for ",round(sum(!is.na(counts_filtered_lib1_10$ML_meanF))/nrow(counts_filtered_lib1_10),digits=4)*100,"% (",sum(!is.na(counts_filtered_lib1_10$ML_meanF)),") of lib1 barcodes",sep=""))
+
+#filter by 20 counts
+counts_filtered_lib1_20 <- copy(counts)
+counts_filtered_lib1_20[total_count < 20, c("ML_meanF","var_ML_meanF") := as.numeric(NA),by=barcode]
+print(paste("Generated meanF estimates for ",round(sum(!is.na(counts_filtered_lib1_20$ML_meanF))/nrow(counts_filtered_lib1_20),digits=4)*100,"% (",sum(!is.na(counts_filtered_lib1_20$ML_meanF)),") of lib1 barcodes",sep=""))
+
+#filter by 30 counts
+counts_filtered_lib1_30 <- copy(counts)
+counts_filtered_lib1_30[total_count < 30, c("ML_meanF","var_ML_meanF") := as.numeric(NA),by=barcode]
+print(paste("Generated meanF estimates for ",round(sum(!is.na(counts_filtered_lib1_30$ML_meanF))/nrow(counts_filtered_lib1_30),digits=4)*100,"% (",sum(!is.na(counts_filtered_lib1_30$ML_meanF)),") of lib1 barcodes",sep=""))
+
+```
+
+
+```{r violins_expression_distribution, echo=T, fig.width=9, fig.height=9, fig.align="center", dpi=300,dev="png"}
+
+p1 <- ggplot(counts[!is.na(ML_meanF),],aes(x=variant_type,y=ML_meanF))+
+  geom_violin(scale="width")+stat_summary(fun=median,geom="point",size=1)+
+  ggtitle("unfiltered")+xlab("variant class")+ylab("expression (ML mean fluor)")+theme(axis.text.x=element_text(angle=-45,hjust=0))+
+  scale_y_continuous(limits=c(4,10))
+
+p2 <- ggplot(counts_filtered_lib1_10[!is.na(ML_meanF),],aes(x=variant_type,y=ML_meanF))+
+  geom_violin(scale="width")+stat_summary(fun=median,geom="point",size=1)+
+  ggtitle("10 cells min")+xlab("variant class")+ylab("expression (ML mean fluor)")+theme(axis.text.x=element_text(angle=-45,hjust=0))+
+  scale_y_continuous(limits=c(4,10))
+
+p3 <- ggplot(counts_filtered_lib1_20[!is.na(ML_meanF),],aes(x=variant_type,y=ML_meanF))+
+  geom_violin(scale="width")+stat_summary(fun=median,geom="point",size=1)+
+  ggtitle("20 cells min")+xlab("variant class")+ylab("expression (ML mean fluor)")+theme(axis.text.x=element_text(angle=-45,hjust=0))+
+  scale_y_continuous(limits=c(4,10))
+
+p4 <- ggplot(counts_filtered_lib1_30[!is.na(ML_meanF),],aes(x=variant_type,y=ML_meanF))+
+  geom_violin(scale="width")+stat_summary(fun=median,geom="point",size=1)+
+  ggtitle("30 cells min")+xlab("variant class")+ylab("expression (ML mean fluor)")+theme(axis.text.x=element_text(angle=-45,hjust=0))+
+  scale_y_continuous(limits=c(4,10))
+
+grid.arrange(p1,p2,p3,p4,ncol=2)
+```
+
+The number of barcodes for which we have a mean flu estimate increases with lower cell count requirement (as expected). 10 cells feels too small, yet based on the FACS gating on WT, the vast majority (>99%) of WT cells are in the medium flu bin. Thus, 10 cells may be sufficient to see a deviation from this. On the other end, too stringent of a cell count filter means we do not have mean flu estimates for many barcodes, and risk including a compromised variant-barcode in our data analysis. Thus, I think the downside of a false positive (wrongly excluding a good variant-barcode) is preferable to a false negative (including an abberent variant-barcode in downstream analysis).
+
+## Proceed with 10 cell minimum requirement
+
+
+```{r output_data}
+
+## Filtering step to remove rows with NA for mean (aka things that did not have high enough read count for each filter level)
+
+# 10 min
+counts_10 <- counts_filtered_lib1_10[!is.na(ML_meanF),]
+print(dim(counts_10))
+
+```
+
+
+Save as csv
+```{r output_data}
+
+write.csv(counts_10, "20250506_REP1_FACS_meanF_Part2output", row.names=FALSE)
+
+```
